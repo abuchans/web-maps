@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.css">
+    <script src="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.js"></script>
+    <script src='https://api.mapbox.com/mapbox.js/plugins/turf/v2.0.2/turf.min.js'></script>
+    <script type="text/javascript" src="fawnglen.js"></script>
+    <script type="text/javascript" src="fawnglenpts.js"></script>
+    <style>
+        #mapid { position:absolute; top: 0; bottom: 0; width: 100%; }
+        .legend {
+            line-height: 18px;
+            color: #555;
+        }
+        .legend i {
+          float:left;
+          height:18px;
+          width:18px;
+          margin-right: 8px;
+          opacity: 0.7;
+          }
+        .info {
+          padding: 6px 8px;
+          font: 14px/16px Arial, Helvetica, sans-serif;
+          background: white;
+          background: rgba(255,255,255,1);
+          box-shadow: 0 0 15px rgba(0,0,0,0.2);
+          border-radius: 5px;
+          }
+        .info h4 {
+          margin: 0 0 5px;
+          color: #777;
+          }
+        .maptitle {
+          line-height: 18px;
+          color: #555;
+          background: white;
+          box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+          border-radius: 5px;
+          padding: 6px 8px;
+         }
+        .maptitle h1 {
+          margin: 0 0 5px;
+          color: black;
+        }
+    </style>
+</head>
+<body>
+    <div id="mapid"></div>
+    <script>
+    var mymap = L.map('mapid', {zoomControl: false, center: [35.84, -78.57], zoom: 16});
+    //var bounds = L.latLngBounds([[35.82,-78.58],[35.85,-78.54]]);
+
+    L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+        maxZoom: 18,
+        id: 'mapbox.streets',
+        accessToken: 'pk.eyJ1IjoiYWFiNzYwIiwiYSI6ImNpcWhjMW40djA0a2ZmbG0xcTJzc3Jtb3gifQ.tqpLfA5Da8HFYPYn2ou4DA'
+    }).addTo(mymap);
+
+    L.control.scale({
+        position: 'bottomleft',
+        metric: false
+    }).addTo(mymap);
+
+    var maptitle = L.control({position: 'topleft'});
+    maptitle.onAdd = function (mymap) {
+        var div = L.DomUtil.create('div', 'maptitle');
+        div.innerHTML = '<h1>Fawn Glen Closure Impacts</h1>';
+        return div;
+    };
+    maptitle.addTo(mymap);
+
+    L.control.zoom({position: 'bottomright'}).addTo(mymap);
+
+    //add the control box showing houses attribute
+    var info = L.control();
+    info.onAdd = function (mymap) {
+        this._div = L.DomUtil.create('div', 'info');
+        this.update();
+        return this._div;
+    };
+    info.update = function (props) {
+        this._div.innerHTML = '<h4>Properties Impacted</h4>' + (props ?
+            '<b>' + props.closure + '</b><br />' + props.houses + ' houses'
+            : 'Hover over an area');
+    };
+    info.addTo(mymap);
+
+    //add legend
+    var legend = L.control({position: 'bottomleft'});
+    legend.onAdd = function (mymap) {
+        var div = L.DomUtil.create('div', 'info legend'),
+            grades = [56, 58, 78],
+            labels = [];
+        for (var i=0; i<grades.length; i++) {
+            div.innerHTML +=
+                '<i style="background:' + getColor(grades[i]) + '"></i> ' +
+                grades[i] + '&nbsp' + 'Houses<br><br>';
+        }
+        return div;
+    };
+    legend.addTo(mymap);
+
+    function highlightFeature(e) {
+        var layer = e.target;
+        layer.setStyle({
+            weight: 5,
+            color: '#666',
+            fillOpacity: 0.7
+        });
+        if (!L.Browser.ie && !L.Browser.opera) {
+            layer.bringToFront();
+        }
+        info.update(layer.feature.properties);
+    }
+
+    function resetHighlight(e) {
+        geojson.resetStyle(e.target);
+        info.update();
+    }
+
+    function turfInfo(e) {
+        var layer = e.target;
+        layer.setPopupContent("Will do turf.js here").openPopup();
+    }
+
+    var geojson;
+    var addresses;
+
+    function onEachFeature(feature, layer) {
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight
+        });
+        if (feature.properties && feature.properties.FULLADDR) {
+            layer.bindPopup('<strong>' + feature.properties.FULLADDR + '</strong><br>Is inside Right Out area? '
+            + '<b>' + feature.properties.Inside + '</b><br>Is inside Right In area? <b>' + feature.properties.Inside2 + '</b>');
+        }
+    }
+
+    function getColor(h) {
+        return h === 58 ? '#FD8D3C' :
+               h === 56 ? '#800026' :
+               h === 78 ? '#E31A1C' :
+                          '#FFEDA0';
+    }
+
+    function style(feature) {
+        return {
+            fillColor: getColor(feature.properties.houses),
+            fillOpacity: 0.5,
+            color: 'black'
+        }
+    }
+
+    for (i=0;i<points.features.length;i++) {
+         if (turf.inside(points.features[i],polys[0])) {
+             points.features[i].properties['Inside'] = 'Yes'
+         } else {
+             points.features[i].properties['Inside'] = 'No'
+         }
+         if (turf.inside(points.features[i],polys[1])) {
+             points.features[i].properties['Inside2'] = 'Yes'
+         } else {
+             points.features[i].properties['Inside2'] = 'No'
+         }
+    }
+
+    geojson = L.geoJson(polys, {
+        style: style,
+        onEachFeature: onEachFeature
+    });
+
+    addresses = L.geoJson(points, {onEachFeature: onEachFeature}).addTo(mymap);
+
+    var overlayMaps = {
+        "Areas": geojson,
+        "Houses": addresses
+    };
+
+    L.control.layers(null, overlayMaps, {collapsed: false}).addTo(mymap);
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>esri javascript api</title>
+  <style>
+    html,
+    body,
+    #viewDiv {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+    }
+    #title {
+      z-index: 99;
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      padding: 25px;
+      margin-left: -175px;
+      height: 20px;
+      width: 350px;
+      background: rgba(25, 25, 25);
+      color: white;
+    }
+    #info {
+      background-color: black;
+      opacity: 0.75;
+      color: orange;
+      font-size: 18pt;
+      padding: 8px;
+      visibility: hidden;
+    }
+  </style>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.0/esri/css/main.css">
+  <script src="https://js.arcgis.com/4.3/"></script>
+</head>
+<body>
+  <div id="viewDiv"></div>
+  <div id="title">Raleigh Fiber</div>
+  <div id="info">
+      <span id="type"></span><br>
+      <span id="num"></span>
+  </div>
+  <script>
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/FeatureLayer",
+      "esri/renderers/UniqueValueRenderer",
+      "esri/symbols/SimpleLineSymbol",
+      "esri/widgets/Legend",
+      "dojo/dom",
+      "dojo/domReady!"
+    ], function(
+      Map, MapView, FeatureLayer, UniqueValueRenderer,
+      SimpleLineSymbol, Legend, dom) {
+      var agSym = new SimpleLineSymbol({
+           color: "#0000ff",
+           width: 2,
+           style: "solid"
+         });
+      var ugSym = new SimpleLineSymbol({
+        color: "#ff0000",
+        width: 2,
+        style: "solid"
+      });
+      var otherSym = new SimpleLineSymbol({
+        color: "#808080",
+        width: 1,
+        style: "short-dot"
+      });
+      var fiberRenderer = new UniqueValueRenderer({
+          field: "LAYER",
+          uniqueValueInfos: [
+          {
+            value: "FiberUG",
+            symbol: ugSym,
+            label: "Fiber - Under Ground"
+          }, {
+            value: "FiberAG",
+            symbol: agSym,
+            label: "Fiber - Above Ground"
+        }, {
+            value: "WirelessConnection",
+            symbol: otherSym,
+            label: "Fiber - Wireless Conn"
+        }]
+      });
+
+      var fibers = new FeatureLayer({
+          url: "https://maps.raleighnc.gov/arcgis/rest/services/PublicWorks/RaleighFiber/MapServer",
+          layerId: 0,
+          renderer: fiberRenderer
+      });
+
+      // Create the Map
+      var map = new Map({
+        basemap: "streets-navigation-vector",
+        layers: [fibers]
+      });
+
+      // Create the MapView
+      var view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [-78.65, 35.78],
+        zoom: 15
+      });
+
+      view.ui.add("info", "top-right");
+
+      view.on("click", function(evt) {
+        var screenPoint = {
+          x: evt.x,
+          y: evt.y
+        };
+
+        view.hitTest(screenPoint)
+          .then(getGraphics);
+      });
+
+      function getGraphics(response) {
+         var graphic = response.results[0].graphic;
+         var attributes = graphic.attributes;
+         var type = attributes.LAYER;
+         var num = attributes.NUMFIBER;
+
+         dom.byId("info").style.visibility = "visible";
+         dom.byId("type").innerHTML = type;
+         dom.byId("num").innerHTML = num;
+      }
+
+      view.then(function() {
+          var legend = new Legend({
+              view: view,
+              layerInfos: [{
+                  layer: fibers,
+                  title: "Raleigh Fiber"
+              }]
+          });
+          view.ui.add(legend, "bottom-left");
+      });
+    });
+  </script>
+</body>
+</html>

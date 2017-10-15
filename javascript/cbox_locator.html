@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700' rel='stylesheet'>
+    <script src='https://api.mapbox.com/mapbox.js/v2.4.0/mapbox.js'></script>
+    <link href='https://api.mapbox.com/mapbox.js/v2.4.0/mapbox.css' rel='stylesheet' />
+    <script type='text/javascript' src='controlbox.js'></script>
+    <style>
+        body {
+            color:#404040;
+            font:400 15px/22px 'Source Sans Pro', 'Helvetica Neue', Sans-serif;
+            margin:0;
+            padding:0;
+            -webkit-font-smoothing:antialiased;
+        }
+        * {
+            -webkit-box-sizing:border-box;
+            -moz-box-sizing:border-box;
+            box-sizing:border-box;
+        }
+        h1 {
+            font-size:22px;
+            margin:0;
+            font-weight:400;
+        }
+        a {
+            color:#404040;
+            text-decoration:none;
+        }
+        a:hover { color:#101010; }
+
+        .sidebar {
+            position:absolute;
+            width:33.3333%;
+            height:100%;
+            top:0;left:0;
+            overflow:hidden;
+            border-right:1px solid rgba(0,0,0,0.25);
+        }
+        .pad2 {
+            padding:20px;
+        }
+        .quiet {
+            color:#888;
+        }
+        .map {
+            position:absolute;
+            left:33.3333%;
+            width:66.6666%;
+            top:0;bottom:0;
+        }
+        .heading {
+            background:#fff;
+            border-bottom:1px solid #eee;
+            height:60px;
+            line-height:60px;
+            padding:0 10px;
+        }
+        .listings {
+            height:100%;
+            overflow:auto;
+            padding-bottom:60px;
+        }
+        .listings .item {
+            display:block;
+            border-bottom:1px solid #eee;
+            padding:10px;
+            text-decoration:none;
+        }
+        .listings .item:last-child { border-bottom:none; }
+        .listings .item .title {
+            display:block;
+            color:#00853e;
+            font-weight:700;
+        }
+        .listings .item .title small { font-weight:400; }
+        .listings .item.active .title,
+        .listings .item .title:hover { color:#8cc63f; }
+        .listings .item.active {
+            background-color:#f8f8f8;
+        }
+        .legend {
+			line-height: 18px;
+			color: #333333;
+			font-family: 'Open Sans', Helvetica, sans-serif;
+			padding: 6px 8px;
+			background: white;
+			background: rgba(255,255,255,0.8);
+			box-shadow: 0 0 15px rgba(0,0,0,0.2);
+			border-radius: 5px;
+		}
+        .legend img {
+			width: 18px;
+			height: 18px;
+			float: left;
+		}
+
+        ::-webkit-scrollbar {
+            width:3px;
+            height:3px;
+            border-left:0;
+            background:rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-track {
+            background:none;
+        }
+        ::-webkit-scrollbar-thumb {
+            background:#00853e;
+            border-radius:0;
+        }
+
+        .clearfix { display:block; }
+        .clearfix:after {
+            content:'.';
+            display:block;
+            height:0;
+            clear:both;
+            visibility:hidden;
+        }
+
+        /* Marker tweaks */
+        .leaflet-popup-close-button {
+            display:none;
+        }
+        .leaflet-popup-content {
+            font:400 15px/22px 'Source Sans Pro', 'Helvetica Neue', Sans-serif;
+            padding:0;
+            width:200px;
+        }
+        .leaflet-popup-content-wrapper {
+            padding:0;
+        }
+        .leaflet-popup-content h3 {
+            background:#91c949;
+            color:#fff;
+            margin:0;
+            display:block;
+            padding:10px;
+            border-radius:3px 3px 0 0;
+            font-weight:700;
+            margin-top:-15px;
+        }
+        .leaflet-popup-content div {
+            padding:10px;
+        }
+        .leaflet-container .leaflet-marker-icon { cursor:pointer; }
+    </style>
+<body>
+    <div class='sidebar'>
+        <div class='heading'>
+            <h1>Downtown Control Boxes</h1>
+        </div>
+        <div id='listings' class='listings'></div>
+    </div>
+    <div id='map' class='map pad2'>Map</div>
+    <script>
+        L.mapbox.accessToken = 'pk.eyJ1IjoiYWFiNzYwIiwiYSI6ImNpcWhjMW40djA0a2ZmbG0xcTJzc3Jtb3gifQ.tqpLfA5Da8HFYPYn2ou4DA';
+
+        var map = L.mapbox.map('map', 'mapbox.light')
+        .setView([35.78, -78.64], 20);
+
+        var locations = L.mapbox.featureLayer().addTo(map);
+        locations.setGeoJSON(controlBoxes);
+
+        var listings = document.getElementById('listings');
+
+        function setActive(el) {
+            var siblings = listings.getElementsByTagName('div');
+            for (var i = 0; i < siblings.length; i++) {
+                siblings[i].className = siblings[i].className
+                .replace(/active/, '').replace(/\s\s*$/, '');
+            }
+
+            el.className += ' active';
+        }
+
+        locations.eachLayer(function (locale) {
+            var prop = locale.feature.properties;
+            var popup = '<h3>Control Box</h3><div>' + prop.ROUTE;
+            var listing = listings.appendChild(document.createElement('div'));
+            listing.className = 'item';
+            var link = listing.appendChild(document.createElement('a'));
+            link.href = '#';
+            link.className = 'title';
+            link.innerHTML = prop.ROUTE;
+
+            if (prop.IS_STATE==='YES') {
+                link.innerHTML += ' <br /><small>State Intersection</small>';
+                popup += '<br /><small class="quiet">State Intersection</small>';
+            }
+
+            var details = listing.appendChild(document.createElement('div'));
+            details.innerHTML = prop.MOUNTTYPE;
+
+            if (prop.MOUNTTYPE==='POLE') {
+                details.innerHTML += ' &middot; FACILITYID: ' + prop.FACILITYID;
+            }
+
+            link.onclick = function () {
+                setActive(listing);
+                map.setView(locale.getLatLng(), 21);
+                locale.openPopup();
+                return false;
+            };
+
+            locale.on('click', function() {
+                map.panTo(locale.getLatLng()).setZoom(20);
+                setActive(listing);
+            });
+            popup += '</div>';
+            locale.bindPopup(popup);
+            locale.setIcon(L.icon({
+                iconUrl: 'marker.png',
+                iconSize: [56,56],
+                iconAnchor: [28,28],
+                popupAnchor: [0,-34]
+            }));
+        });
+
+        var legend = L.control({position: 'bottomright'});
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'legend');
+            div.innerHTML += '<b>Control Boxes</b><br />';
+            div.innerHTML += '<small>Downtown Raleigh</small><br />';
+            div.innerHTML += '<br /><img src="marker.png">Control Box';
+            return div;
+        }
+        legend.addTo(map);
+    </script>
+</body>
+</html>

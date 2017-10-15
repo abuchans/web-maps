@@ -1,0 +1,219 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link href='https://api.mapbox.com/mapbox.js/v2.2.4/mapbox.css' rel='stylesheet' />
+    <script src='https://api.mapbox.com/mapbox.js/v2.2.4/mapbox.js'></script>
+    <script src='https://api.mapbox.com/mapbox.js/plugins/turf/v2.0.2/turf.min.js'></script>
+    <script type="text/javascript" src="fiber.js"></script>
+    <script type="text/javascript" src="junctionbox.js"></script>
+    <script type="text/javascript" src="controlbox.js"></script>
+    <style>
+        #mapid { position:absolute; top: 0; bottom: 0; width: 100%; }
+        .info {
+            padding: 6px 8px;
+            font: 16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255,255,255);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+        }
+        .legend {
+            line-height: 24px;
+            color: #555;
+        }
+        .legend i {
+            width: 18px;
+            height: 8px;
+            float: left;
+            margin-right: 8px;
+        }
+        .legend .circle {
+            border-radius: 50%;
+            width: 10px;
+            height: 10px;
+            margin-bottom: 0px;
+        }
+        .legend span {
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+        .title {
+            background: white;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+        .title h1 {
+            font: 32px Arial;
+            color: #667;
+            margin: 10px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="mapid"></div>
+    <script>
+    L.mapbox.accessToken = 'pk.eyJ1IjoiYWFiNzYwIiwiYSI6ImNpcWhjMW40djA0a2ZmbG0xcTJzc3Jtb3gifQ.tqpLfA5Da8HFYPYn2ou4DA';
+    var mymap = L.map('mapid', {zoomControl: false, center: [35.78, -78.64], zoom: 16});
+
+    L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+        minZoom: 15,
+        id: 'mapbox.streets',
+        accessToken: 'pk.eyJ1IjoiYWFiNzYwIiwiYSI6ImNpcWhjMW40djA0a2ZmbG0xcTJzc3Jtb3gifQ.tqpLfA5Da8HFYPYn2ou4DA'
+    }).addTo(mymap);
+
+    //add geoJson properties for marker styling
+    for(var i = 0; i < junctionBox.features.length; i++) {
+      junctionBox.features[i].properties['marker-color'] = '#DC143C';
+      junctionBox.features[i].properties['marker-symbol'] = 'circle';
+      junctionBox.features[i].properties['marker-size'] = 'small';
+    };
+
+    for(var i = 0; i < controlBoxes.features.length; i++) {
+      controlBoxes.features[i].properties['marker-color'] = '#ff7800';
+      controlBoxes.features[i].properties['marker-symbol'] = 'square';
+      controlBoxes.features[i].properties['marker-size'] = 'small';
+    };
+
+    function colorFunc(layer) {
+        if (layer === 'FiberUG') {
+            return '#ff0000'
+        } else {
+            return '#0000ff'
+        }
+    }
+    //style for fiberLines, uses above function
+    function myStyle(feature) {
+        return {
+        "color": colorFunc(feature.properties.LAYER),
+        "weight": 5,
+        "opacity": 0.85
+        }
+    }
+
+    var fiber;
+    function highlightFeature(e) {
+        var layer = e.target;
+        layer.setStyle({
+            weight: 8,
+        });
+        layer.bringToFront();
+    }
+
+    function resetHighlight(e) {
+        fiber.resetStyle(e.target);
+    }
+    //function to attach behaviors to fiberLines
+    function onEachFeature(feature, layer) {
+        layer.bindPopup('<b>' + feature.properties.NUMFIBER + '</b> Fibers', {closeButton: false});
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight,
+            click: function(e) {
+                layer.openPopup();
+                mymap.fitBounds(e.target.getBounds());
+            }
+        });
+    }
+
+    //add featureLayers to map
+    fiber = L.geoJson(fiberLines, {style: myStyle, onEachFeature, onEachFeature}).addTo(mymap);
+    var junctionBoxLayer = L.mapbox.featureLayer(junctionBox).addTo(mymap);
+    var controlBoxesLayer = L.mapbox.featureLayer(controlBoxes).addTo(mymap);
+    mymap.fitBounds(controlBoxesLayer.getBounds());
+
+    //add popup to controlBoxesLayer stating route and if state intersection
+    controlBoxesLayer.eachLayer(function (layer) {
+        layer.bindPopup('<h1>' + layer.feature.properties.ROUTE + '</h1>Is State intersection?: ' +
+            '<b>' + layer.feature.properties.IS_STATE + '</b>', {closeButton: false});
+    })
+
+    //add following event handlers to controlBoxesLayer
+    controlBoxesLayer.on('mouseover', function (e) {
+        e.layer.openPopup();
+    })
+
+    controlBoxesLayer.on('mouseout', function (e) {
+        e.layer.closePopup();
+    })
+    controlBoxesLayer.on('click', function (e) {
+      reset();
+      mymap.panTo(e.layer.getLatLng()).zoomIn();
+      // Get the GeoJSON from junctionBoxLayer and junctionBoxLayer
+      var junctionboxFeatures = junctionBoxLayer.getGeoJSON();
+      var controlboxFeatures = controlBoxesLayer.getGeoJSON();
+
+      // Using Turf, find the nearest junctionbox to controlbox clicked
+      var nearestJB = turf.nearest(e.layer.feature, junctionboxFeatures);
+      var nearestJBDist = (turf.distance(e.layer.feature, nearestJB, 'miles') * 5280).toPrecision(5);
+
+      // Change the nearest junctionbox to a large marker
+      nearestJB.properties['marker-size'] = 'large';
+
+      // Add the new GeoJSON to junctionBoxLayer
+      junctionBoxLayer.setGeoJSON(junctionboxFeatures);
+      //bind popup to each junctionbox and open any that are large
+      junctionBoxLayer.eachLayer(function (layer) {
+          var props = layer.feature.properties;
+          layer.bindPopup(
+              '<h2>' + props.Type + '</h2><p>Distance: ' + nearestJBDist + ' Feet</p>', { closeButton: false }
+          );
+          if (layer.feature.properties['marker-size']==='large') {
+              layer.openPopup();
+          }
+      });
+
+    });
+
+    //reset all junctionBoxLayer symbols to small
+    function reset() {
+        var junctionboxFeatures = junctionBoxLayer.getGeoJSON();
+        for(var i = 0; i < junctionBox.features.length; i++) {
+          junctionBox.features[i].properties['marker-size'] = 'small';
+        };
+        junctionBoxLayer.setGeoJSON(junctionboxFeatures);
+    }
+
+    mymap.on('click', function (e) {
+        reset();
+    });
+
+    //zoom buttons
+    var zoom = L.control.zoom({position: 'topright'});
+
+    //legend
+    var legend = L.control({position: 'bottomleft'});
+    legend.onAdd = function (mymap) {
+        var div = L.DomUtil.create('div', 'info legend');
+        div.innerHTML = '<i style="background:#ff0000"></i><span>Underground Fiber</span>' +
+            '<br><i style="background:#0000ff"></i><span>Above Ground Fiber</span>' +
+            '<hr><i class="circle" style="background:orange"></i><span>Control Box</span>' +
+            '<br><i class="circle" style="background:red"></i><span>Junction Box</span>';
+        return div;
+    };
+
+    //title
+    var title = L.control({position: 'topleft'});
+    title.onAdd = function (mymap) {
+        var div = L.DomUtil.create('div', 'title');
+        div.innerHTML = '<h1>Fiber Map</h1>';
+        return div;
+    };
+
+    zoom.addTo(mymap);
+    title.addTo(mymap);
+    legend.addTo(mymap);
+    //layers object and control
+    var layers = {
+        "Fiber": fiber,
+        "Control Boxes": controlBoxesLayer,
+        "Junction Boxes": junctionBoxLayer
+    };
+    L.control.layers(null, layers, {collapsed: false, position: 'topleft'}).addTo(mymap);
+
+    //restricts map bounds to the fiber layer
+    mymap.setMaxBounds(fiber.getBounds());
+    </script>
+</body>
+</html>
